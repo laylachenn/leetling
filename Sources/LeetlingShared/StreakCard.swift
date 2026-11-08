@@ -22,10 +22,12 @@ public struct StreakCard: View {
             // Header: month + day columns
             HStack(alignment: .bottom, spacing: 0) {
                 Text(now.formatted(.dateTime.month(.wide)))
-                    .font(.system(size: compact ? 14 : 17, weight: .bold, design: .rounded))
+                    .font(.system(size: compact ? 13 : 17, weight: .bold, design: .rounded))
                     .foregroundStyle(Theme.plum)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    // No minimumScaleFactor here: in offscreen renders (which is how widgets are drawn)
+                    // it made the month name vanish entirely.
+                    .fixedSize()
                     .frame(width: labelWidth, alignment: .leading)
                 ForEach(week) { day in
                     VStack(spacing: 1) {
