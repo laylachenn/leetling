@@ -1,0 +1,51 @@
+import AppKit
+import LeetlingShared
+import SwiftUI
+
+@main
+struct LeetlingApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    private let store = AppStore.shared
+
+    var body: some Scene {
+        WindowGroup("Leetling") {
+            RootView()
+                .environment(store)
+                .preferredColorScheme(.light)
+                .frame(minWidth: 1100, minHeight: 720)
+                .onOpenURL { url in
+                    if url.host == "today" {
+                        store.openProblemID = nil
+                        store.section = .today
+                    }
+                }
+        }
+        .defaultSize(width: 1280, height: 820)
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+        }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        AppStore.shared.ensureRandomPick()
+        DesktopBuddy.shared.setVisible(AppStore.shared.progress.showDesktopBuddy)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        AppStore.shared.saveNow()
+    }
+
+    // Keep running (for the desktop buddy) after the main window closes; clicking the Dock icon reopens it.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !AppStore.shared.progress.showDesktopBuddy
+    }
+}
+
+extension AppStore {
+    static let shared = AppStore()
+}
