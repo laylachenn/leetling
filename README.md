@@ -63,6 +63,15 @@ This compiles the app and its widget, signs them locally, installs **Leetling** 
 
 > Prefer something that floats on your desktop instead? Turn on **Settings → Floating desktop buddy**.
 
+## On your iPhone (web app)
+
+Leetling also runs as a web app (`web/`), so you can practice on your phone. Your Python runs right in the browser through [Pyodide](https://pyodide.org), using the same judge and tests as the Mac app.
+
+- **Online:** it deploys to GitHub Pages on every push to `main` (`.github/workflows/pages.yml`). Open the Pages URL in **Safari**, then tap **Share → Add to Home Screen**. It opens full-screen and works offline after the first run.
+- **Locally:** `scripts/serve_web.sh` serves it at `http://localhost:8000`. It also prints a URL you can open from an iPhone on the same Wi-Fi.
+- **Progress** stays on each device. **Settings → Your data** exports and imports it in the same format as the Mac app's `progress.json`, so you can move progress between them.
+- There's no iPhone widget (web apps can't make one), but the Today screen has the same weekly streak card.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |

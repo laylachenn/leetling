@@ -1,0 +1,15 @@
+{
+  "name": "Leetling",
+  "short_name": "Leetling",
+  "description": "A cozy daily Blind 75 practice app. Solve in Python, earn packs, collect Leetlings.",
+  "start_url": "./#/today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFF1F5",
+  "theme_color": "#FFF1F5",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
