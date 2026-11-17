@@ -50,6 +50,8 @@ rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
+# Forget the build-dir copy so widget clicks / URLs never launch a second Leetling from .build.
+"$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true
 pluginkit -a "$DEST/Contents/PlugIns/LeetlingWidget.appex" >/dev/null 2>&1 || true
 
 echo "✨ Done! Leetling is installed at ${DEST}"

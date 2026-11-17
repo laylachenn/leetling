@@ -8,7 +8,9 @@ struct LeetlingApp: App {
     private let store = AppStore.shared
 
     var body: some Scene {
-        WindowGroup("Leetling") {
+        // A single-instance `Window` (not `WindowGroup`) so leetling:// URLs from the widget reuse
+        // the existing window instead of spawning a second one.
+        Window("Leetling", id: "main") {
             RootView()
                 .environment(store)
                 .preferredColorScheme(.light)
