@@ -42,7 +42,7 @@ struct OwnedLeetling: Codable, Hashable {
 
 /// Everything the app persists, stored as JSON at ~/Library/Application Support/Leetling/progress.json.
 /// Every field decodes with a default so older files keep loading as fields get added.
-struct Progress: Codable {
+struct Progress: Codable, Equatable {
     var solved: [String: SolveRecord] = [:]          // problem id → record
     var attempts: [String: Int] = [:]                // problem id → submissions
     var drafts: [String: String] = [:]               // problem id → code in the editor

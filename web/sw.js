@@ -1,9 +1,9 @@
 // Offline support. App files: network first (so updates show up), falling back to the cache.
 // Pyodide from the CDN: cache first (versioned URLs never change), so Python works offline after one load.
-const VERSION = "leetling-v1";
+const VERSION = "leetling-v2";
 const SHELL = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "vendor/preact-htm.mjs",
-  "js/app.js", "js/dex.js", "js/store.js", "js/python.js", "js/editor.js", "js/text.js",
+  "js/app.js", "js/dex.js", "js/store.js", "js/python.js", "js/editor.js", "js/text.js", "js/sync.js",
   "js/runner-worker.js", "js/judge.py", "data/problems.json", "data/problems-full.json", "data/runner.py",
   "icons/icon-192.png", "icons/apple-touch-icon.png",
 ];

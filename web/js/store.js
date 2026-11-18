@@ -3,6 +3,7 @@
 // so you can export from one and import into the other (Settings → Your data).
 
 import { COPIES_TO_EVOLVE, DEX, DEX_BY_ID, PACK_KINDS, PACKS, rollPack } from "./dex.js";
+import { canonical, createGist, findGist, isFresh, mergeProgress, readGist, writeGist } from "./sync.js";
 
 export const CATEGORY_ORDER = [
   "Arrays & Hashing", "Two Pointers", "Sliding Window", "Stack", "Binary Search", "Linked List",
@@ -28,6 +29,7 @@ export const MODES = {
 export const STREAK_MILESTONES = [3, 7, 14, 21, 30, 45, 60, 75, 100, 150, 200, 365];
 const DIFFICULTY_RANK = { Easy: 0, Medium: 1, Hard: 2 };
 const STORAGE_KEY = "leetling.progress.v1";
+const SYNC_KEY = "leetling.sync.v1";
 
 // ---------------------------------------------------------------- days
 
@@ -92,6 +94,14 @@ function loadProgress() {
   return p;
 }
 
+function loadSyncConfig() {
+  try {
+    const cfg = JSON.parse(localStorage.getItem(SYNC_KEY) || "null");
+    if (cfg && typeof cfg.token === "string" && cfg.token) return cfg;
+  } catch { /* not connected */ }
+  return null;
+}
+
 const addToSet = (arr, v) => (arr.includes(v) ? arr : [...arr, v]);
 
 // ---------------------------------------------------------------- store
@@ -104,6 +114,13 @@ class Store {
     this.celebration = null;
     this.listeners = new Set();
     this.saveTimer = null;
+    // Gist sync (see sync.js). `syncConfig` = { token, gistId, base } lives in its own localStorage key.
+    this.syncConfig = loadSyncConfig();
+    this.syncStatus = { state: this.syncConfig ? "idle" : "off", lastSynced: null, message: null };
+    this.syncTimer = null;
+    this.syncRunning = Promise.resolve(); // the sync in flight (syncs run one at a time)
+    this.syncQueued = null;               // the next sync, if one is waiting (extra requests join it)
+    this.chooseSyncMerge = async () => "combine"; // replaced by the UI with a friendly dialog
   }
 
   setProblems(list) {
@@ -129,6 +146,7 @@ class Store {
     clearTimeout(this.saveTimer);
     if (immediate) this.saveNow();
     else this.saveTimer = setTimeout(() => this.saveNow(), 400);
+    this.scheduleSync(immediate ? 1500 : 8000);
     if (!silent) this.emit();
   }
 
@@ -362,6 +380,7 @@ class Store {
     this.progress = normalizeProgress(parsed);
     this.saveNow();
     this.emit();
+    this.syncNow({ overwrite: true });
   }
 
   resetAll() {
@@ -370,6 +389,119 @@ class Store {
     this.progress = p;
     this.saveNow();
     this.emit();
+    this.syncNow({ overwrite: true });
+  }
+
+  // ------------------------------------------------------------ sync
+
+  get syncConnected() { return !!this.syncConfig?.token; }
+
+  saveSyncConfig() {
+    try {
+      if (this.syncConfig) localStorage.setItem(SYNC_KEY, JSON.stringify(this.syncConfig));
+      else localStorage.removeItem(SYNC_KEY);
+    } catch (e) {
+      console.warn("Leetling: couldn't save sync settings", e);
+    }
+  }
+
+  setSyncStatus(patch) {
+    this.syncStatus = { ...this.syncStatus, ...patch };
+    this.emit();
+  }
+
+  /** Changes since the last sync that the gist doesn't have yet. */
+  get syncDirty() {
+    const base = this.syncConfig?.base;
+    return !base || canonical(base) !== canonical(this.progress);
+  }
+
+  scheduleSync(delay) {
+    if (!this.syncConnected) return;
+    clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => { if (this.syncDirty) this.syncNow(); }, delay);
+  }
+
+  async connectSync(token) {
+    this.syncConfig = { token: token.trim(), gistId: null, base: null };
+    this.saveSyncConfig();
+    const ok = await this.syncNow();
+    if (!ok && this.syncStatus.auth) {
+      this.syncConfig = null;
+      this.saveSyncConfig();
+      this.setSyncStatus({ state: "off" });
+    }
+    return ok;
+  }
+
+  disconnectSync() {
+    clearTimeout(this.syncTimer);
+    this.syncConfig = null;
+    this.saveSyncConfig();
+    this.setSyncStatus({ state: "off", lastSynced: null, message: null, auth: false });
+  }
+
+  /**
+   * Pull the gist, merge it with this device, and push the result. `overwrite` replaces the gist
+   * with this device's progress (after an import or a reset). Returns true when it worked.
+   */
+  syncNow({ overwrite = false, keepalive = false } = {}) {
+    if (!this.syncConnected) return Promise.resolve(false);
+    if (this.syncQueued) {
+      this.syncQueued.overwrite ||= overwrite;
+      return this.syncQueued.promise;
+    }
+    const job = { overwrite, keepalive };
+    job.promise = this.syncRunning.then(() => {
+      this.syncQueued = null;
+      return this.runSync(job);
+    });
+    this.syncQueued = job;
+    this.syncRunning = job.promise;
+    return job.promise;
+  }
+
+  async runSync({ overwrite, keepalive }) {
+    const cfg = this.syncConfig;
+    if (!cfg?.token) return false;
+    clearTimeout(this.syncTimer);
+    this.setSyncStatus({ state: "syncing" });
+    try {
+      if (!cfg.gistId) cfg.gistId = await findGist(cfg.token);
+      let remote = cfg.gistId ? await readGist(cfg.token, cfg.gistId) : null;
+      if (!remote) {
+        const snapshot = structuredClone(this.progress);
+        cfg.gistId = await createGist(cfg.token, snapshot);
+        cfg.base = snapshot;
+      } else {
+        remote = normalizeProgress(remote);
+        let merged;
+        if (overwrite) merged = this.progress;
+        else if (cfg.base) merged = mergeProgress(cfg.base, this.progress, remote);
+        else if (isFresh(this.progress)) merged = remote;
+        else {
+          const choice = await this.chooseSyncMerge();
+          merged = choice === "remote" ? remote : mergeProgress(null, this.progress, remote);
+        }
+        merged = normalizeProgress(structuredClone(merged));
+        // This device now holds everything in `remote`, so remote is the right base even if the push fails.
+        cfg.base = remote;
+        if (canonical(merged) !== canonical(this.progress)) {
+          this.progress = merged;
+          this.saveNow();
+        }
+        if (canonical(merged) !== canonical(remote)) await writeGist(cfg.token, cfg.gistId, merged, { keepalive });
+        cfg.base = merged;
+      }
+      this.saveSyncConfig();
+      this.setSyncStatus({ state: "idle", lastSynced: new Date(), message: null, auth: false });
+      return true;
+    } catch (e) {
+      this.saveSyncConfig();
+      console.warn("Leetling sync:", e);
+      this.setSyncStatus({ state: "error", message: e.message || "Sync didn't work this time 🌙", auth: !!e.auth });
+      return false;
+    }
   }
 }
 

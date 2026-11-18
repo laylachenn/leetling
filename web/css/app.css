@@ -495,10 +495,11 @@ input, select { font: inherit; color: var(--plum); }
 
 .settings .card { display: flex; flex-direction: column; gap: 8px; }
 .setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-weight: 700; font-size: 14.5px; }
-.setting input[type="text"] {
+.setting input[type="text"], .setting input[type="password"] {
   border: 1px solid var(--blush); border-radius: 12px; padding: 8px 12px; background: var(--paper); font-size: 16px; min-width: 0; flex: 0 1 220px; outline: none;
 }
-.setting input[type="text"]:focus { border-color: var(--rose); }
+.setting input[type="text"]:focus, .setting input[type="password"]:focus { border-color: var(--rose); }
+.settings .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

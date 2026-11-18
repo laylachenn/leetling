@@ -15,6 +15,13 @@ struct LeetlingApp: App {
                 .environment(store)
                 .preferredColorScheme(.light)
                 .frame(minWidth: 1100, minHeight: 720)
+                .alert("You have progress in two places 🌷", isPresented: Binding(
+                    get: { store.sync.isChoosing }, set: { _ in })) {
+                    Button("Combine both") { store.sync.resolveChoice(.combine) }
+                    Button("Use the synced copy") { store.sync.resolveChoice(.remote) }
+                } message: {
+                    Text("This Mac and your synced copy both have solves and Leetlings. Combine them into one, or replace this Mac's progress with the synced copy?")
+                }
                 .onOpenURL { url in
                     if url.host == "today" {
                         store.openProblemID = nil
@@ -36,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         AppStore.shared.ensureRandomPick()
         DesktopBuddy.shared.setVisible(AppStore.shared.progress.showDesktopBuddy)
+        AppStore.shared.onDesktopBuddyChange = { DesktopBuddy.shared.setVisible($0) }
+        AppStore.shared.sync.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

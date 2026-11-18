@@ -45,7 +45,8 @@ function Dialog() {
   showDialog = setD;
   if (!d) return null;
   const close = (v) => { setD(null); d.resolve(v); };
-  return html`<div class="overlay" onClick=${(e) => e.target === e.currentTarget && close(false)}>
+  // Tapping outside resolves null (falsy, so it still reads as "cancel" for yes/no questions).
+  return html`<div class="overlay" onClick=${(e) => e.target === e.currentTarget && close(null)}>
     <div class="dialog card pop" role="dialog" aria-modal="true">
       <h3>${d.title}</h3>
       <p>${d.message}</p>
@@ -724,6 +725,80 @@ function DexDetail({ critter, close }) {
 
 // ---------------------------------------------------------------- Settings
 
+// First sync on a device that already has progress, while the gist has some too.
+store.chooseSyncMerge = async () => {
+  const combine = await ask({
+    title: "You have progress in two places 🌷",
+    message: "This device and your synced copy both have solves and Leetlings. Combine them into one, or replace this device's progress with the synced copy?",
+    ok: "Combine both", cancel: "Use the synced copy",
+  });
+  return combine === false ? "remote" : "combine";
+};
+
+const TOKEN_URL = "https://github.com/settings/tokens/new?scopes=gist&description=Leetling%20sync";
+
+function ago(date) {
+  if (!date) return "";
+  const s = Math.round((Date.now() - date.getTime()) / 1000);
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function SyncCard() {
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const st = store.syncStatus;
+
+  const connect = async () => {
+    if (!token.trim()) return;
+    setBusy(true);
+    const ok = await store.connectSync(token);
+    setBusy(false);
+    if (ok) setToken("");
+  };
+
+  const disconnect = async () => {
+    const ok = await ask({ title: "Stop syncing this device?",
+      message: "Your progress stays on this device and in your gist. It just won't stay in step anymore.",
+      ok: "Stop syncing", cancel: "Keep syncing" });
+    if (ok) store.disconnectSync();
+  };
+
+  if (!store.syncConnected) {
+    return html`<section class="card">
+      <${SectionTitle} title="Sync your devices" emoji="☁️" />
+      <p class="small">Keep your iPhone, Mac and browser in step. Your progress is saved to a <b>private gist</b> on your GitHub account,
+        and solves from every device add up.</p>
+      <ol class="small steps">
+        <li><a href=${TOKEN_URL} target="_blank" rel="noopener">Make a GitHub token</a> with only the <b>gist</b> box ticked.
+          Pick “No expiration” so it keeps working.</li>
+        <li>Paste it here, then do the same on your other devices (Mac: Settings → Sync).</li>
+      </ol>
+      <div class="setting">
+        <input type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" value=${token}
+          onInput=${(e) => setToken(e.target.value)} onKeyDown=${(e) => e.key === "Enter" && connect()} />
+        <button class="btn primary compact" disabled=${busy || !token.trim()} onClick=${connect}>${busy ? "Connecting…" : "Connect"}</button>
+      </div>
+      ${st.state === "error" && html`<p class="small bold">${st.message}</p>`}
+      <p class="muted small">The token stays on this device and is only ever sent to GitHub.</p>
+    </section>`;
+  }
+
+  const line = st.state === "syncing" ? "Syncing… 🔄"
+    : st.state === "error" ? st.message
+    : st.lastSynced ? `Synced ✨ ${ago(st.lastSynced)}` : "Connected ✨";
+  return html`<section class="card">
+    <${SectionTitle} title="Sync your devices" emoji="☁️" />
+    <p class="small bold">${line}</p>
+    <p class="muted small">Leetling syncs when it opens and a few seconds after you make progress.</p>
+    <div class="row gap wrap">
+      <button class="btn secondary compact" disabled=${st.state === "syncing"} onClick=${() => store.syncNow()}>🔄 Sync now</button>
+      <button class="btn quiet compact" onClick=${disconnect}>Disconnect</button>
+    </div>
+  </section>`;
+}
+
 function SettingsView() {
   const [py, setPy] = useState(pythonStatus());
   const [note, setNote] = useState(null);
@@ -748,7 +823,8 @@ function SettingsView() {
     const f = e.target.files?.[0];
     e.target.value = "";
     if (!f) return;
-    const ok = await ask({ title: "Import this progress?", message: "It replaces the progress on this device (solves, streak, packs and Leetlings) with the file's.",
+    const ok = await ask({ title: "Import this progress?", message: "It replaces the progress on this device (solves, streak, packs and Leetlings) with the file's."
+                             + (store.syncConnected ? " Your synced devices will get it too." : ""),
                            ok: "Import", cancel: "Cancel" });
     if (!ok) return;
     try {
@@ -760,7 +836,9 @@ function SettingsView() {
   };
 
   const reset = async () => {
-    const ok = await ask({ title: "Reset all progress?", message: "This erases your solves, streak history, packs and Leetdex on this device. It can't be undone.",
+    const ok = await ask({ title: "Reset all progress?", message: store.syncConnected
+                             ? "This erases your solves, streak history, packs and Leetdex on this device and every synced device. It can't be undone."
+                             : "This erases your solves, streak history, packs and Leetdex on this device. It can't be undone.",
                            ok: "Reset everything", cancel: "Cancel", danger: true });
     if (ok) store.resetAll();
   };
@@ -780,8 +858,10 @@ function SettingsView() {
       ${standalone ? html`<p class="small">You're using Leetling from your Home Screen. Cozy! 🏡</p>`
         : html`<p class="small">For the full app feel, open this page in <b>Safari</b>, tap <b>Share</b> → <b>Add to Home Screen</b>.
           It opens full-screen, works offline after the first run, and your progress stays put.</p>`}
-      <p class="muted small">Heads up: the Home Screen app and a Safari tab keep <i>separate</i> progress, so pick one (the Home Screen app is best).</p>
+      <p class="muted small">Heads up: the Home Screen app and a Safari tab keep <i>separate</i> progress, so pick one (the Home Screen app is best),
+        or turn on sync in both.</p>
     </section>
+    <${SyncCard} />
     <section class="card">
       <${SectionTitle} title="Python" emoji="🐍" />
       <p class="small">${py.state === "ready" ? `Running your code with Python ${py.version} (Pyodide), right in your browser.`
@@ -825,13 +905,21 @@ function App() {
     if (route.section !== "problem") lastSection = route.section;
     fetch("data/problems.json").then((r) => r.json()).then((list) => store.setProblems(list))
       .catch(() => setError("I couldn't load the problems. Check your connection and refresh? 🌷"));
-    const flush = () => document.visibilityState === "hidden" && store.saveNow();
+    const flush = () => {
+      if (document.visibilityState === "hidden") {
+        store.saveNow();
+        if (store.syncConnected && store.syncDirty) store.syncNow({ keepalive: true });
+      } else store.syncNow(); // pull what other devices did while we were away
+    };
     document.addEventListener("visibilitychange", flush);
+    store.syncNow();
+    const poll = setInterval(() => document.visibilityState === "visible" && store.syncNow(), 5 * 60 * 1000);
     // Ask the browser not to evict our data when storage is tight.
     navigator.storage?.persist?.();
     return () => {
       window.removeEventListener("hashchange", onHash);
       document.removeEventListener("visibilitychange", flush);
+      clearInterval(poll);
     };
   }, []);
 

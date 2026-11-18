@@ -60,6 +60,11 @@ final class AppStore {
     var openProblemID: Int? = nil
     var celebration: Celebration? = nil
 
+    /// GitHub Gist sync across devices (see Sync.swift).
+    let sync = SyncService()
+    /// Shows/hides the desktop buddy when a sync or import flips that setting (wired up by AppDelegate).
+    var onDesktopBuddyChange: ((Bool) -> Void)?
+
     static let streakMilestones = [3, 7, 14, 21, 30, 45, 60, 75, 100, 150, 200, 365]
 
     private static var progressURL: URL {
@@ -81,6 +86,7 @@ final class AppStore {
             progress.packs[PackKind.sprout.rawValue] = 1
         }
         writeSnapshot()
+        sync.store = self
     }
 
     // MARK: persistence
@@ -102,6 +108,34 @@ final class AppStore {
         try? FileManager.default.createDirectory(at: LeetlingSnapshot.supportDirectory, withIntermediateDirectories: true)
         try? data.write(to: Self.progressURL, options: .atomic)
         writeSnapshot()
+        sync.scheduleIfDirty()
+    }
+
+    /// Replace progress with the merged copy from a sync.
+    func applySynced(_ merged: Progress) {
+        let buddyWas = progress.showDesktopBuddy
+        progress = merged
+        saveNow()
+        if merged.showDesktopBuddy != buddyWas { onDesktopBuddyChange?(merged.showDesktopBuddy) }
+    }
+
+    func exportProgress(to url: URL) throws {
+        try Data(GistAPI.encode(progress).utf8).write(to: url, options: .atomic)
+    }
+
+    /// Replace this Mac's progress with a file exported from here or from the web app.
+    func importProgress(from url: URL) throws {
+        let text = try String(contentsOf: url, encoding: .utf8)
+        guard let raw = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+              raw["solved"] != nil || raw["dayLog"] != nil || raw["collection"] != nil else {
+            throw SyncError(message: "That file doesn't look like Leetling progress.")
+        }
+        let imported = try GistAPI.decode(text)
+        let buddyWas = progress.showDesktopBuddy
+        progress = imported
+        saveNow()
+        if imported.showDesktopBuddy != buddyWas { onDesktopBuddyChange?(imported.showDesktopBuddy) }
+        sync.request(overwrite: true)
     }
 
     var snapshot: LeetlingSnapshot {
@@ -350,6 +384,7 @@ final class AppStore {
         progress = Progress()
         progress.packs[PackKind.sprout.rawValue] = 1
         saveNow()
+        sync.request(overwrite: true)
     }
 
     var displayName: String {
