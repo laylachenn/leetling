@@ -53,6 +53,9 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 # Forget the build-dir copy so widget clicks / URLs never launch a second Leetling from .build.
 "$LSREGISTER" -u "$APP" >/dev/null 2>&1 || true
 pluginkit -a "$DEST/Contents/PlugIns/LeetlingWidget.appex" >/dev/null 2>&1 || true
+# chronod caches the widget's bundle version. After a reinstall it rejects every new timeline
+# ("Bundle version did not match") and the widget freezes on old data until it restarts.
+killall chronod 2>/dev/null || true
 
 echo "✨ Done! Leetling is installed at ${DEST}"
 if [ "$OPEN" = 1 ]; then open "$DEST"; fi
