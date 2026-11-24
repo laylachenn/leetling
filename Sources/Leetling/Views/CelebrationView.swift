@@ -20,7 +20,7 @@ struct CelebrationView: View {
                     .foregroundStyle(Theme.plum)
                     .multilineTextAlignment(.center)
                 HStack(spacing: 18) {
-                    stat("🔥", "\(celebration.streak)", "day streak")
+                    stat("🔥", "\(celebration.streak)", celebration.streakMended ? "streak mended 🩹" : "day streak")
                     stat("💖", "\(celebration.todayCount)/\(celebration.goal)", "today")
                     stat("📚", "\(store.solvedCount)/\(store.problems.count)", "solved")
                 }

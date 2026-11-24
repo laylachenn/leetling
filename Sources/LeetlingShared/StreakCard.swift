@@ -88,6 +88,9 @@ struct DayMark: View {
                 Image(systemName: "checkmark")
                     .fontWeight(.heavy)
                     .foregroundStyle(Theme.plum)
+            } else if day.mended {
+                Image(systemName: "bandage.fill")
+                    .foregroundStyle(Theme.rose)
             } else if day.isToday {
                 Image(systemName: "circle.dashed")
                     .foregroundStyle(Theme.roseDeep.opacity(0.7))

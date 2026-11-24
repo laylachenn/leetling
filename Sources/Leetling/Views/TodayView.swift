@@ -125,6 +125,10 @@ private struct BuddyCard: View {
     private var message: String {
         let today = store.todayCount, goal = store.progress.dailyGoal
         if store.solvedCount == store.problems.count { return "You finished the Blind 75?! I'm crying 😭💖" }
+        if let mend = store.mendHint {
+            let more = today == 0 ? "\(mend.needed) problem\(mend.needed == 1 ? "" : "s")" : "\(mend.needed) more"
+            return "Solve \(more) today to mend our streak back to \(mend.wouldBe)! 🩹🔥"
+        }
         if today >= goal { return today > goal ? "Overachiever!! I love you 💞" : "Goal met! I'm so proud of you 💖" }
         if today > 0 { return "One down! \(goal - today) more for today's goal 🌷" }
         if store.streak > 0 { return "Let's keep our \(store.streak)-day streak alive! 🔥" }

@@ -162,6 +162,7 @@ input, select { font: inherit; color: var(--plum); }
 .sc-mark { flex: 1; display: flex; justify-content: center; align-items: center; height: 20px; font-size: 17px; }
 .sc-mark .heart { color: var(--rose-deep); font-size: 19px; }
 .sc-mark .check { font-weight: 900; }
+.sc-mark .mend { font-size: 14px; }
 .sc-mark .ring { width: 15px; height: 15px; border-radius: 50%; border: 2px dashed rgba(232, 99, 143, 0.7); }
 .sc-mark .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(75, 41, 66, 0.15); }
 @media (max-width: 420px) {

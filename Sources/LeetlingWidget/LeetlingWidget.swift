@@ -51,7 +51,7 @@ struct SmallStreakView: View {
             HStack(spacing: 4) {
                 ForEach(snap.week(now: entry.date)) { day in
                     Circle()
-                        .fill(day.goalMet ? Theme.roseDeep : day.done ? Theme.rose.opacity(0.55) : Theme.plum.opacity(0.12))
+                        .fill(day.goalMet ? Theme.roseDeep : day.done || day.mended ? Theme.rose.opacity(0.55) : Theme.plum.opacity(0.12))
                         .overlay(Circle().stroke(Theme.roseDeep, lineWidth: day.isToday ? 1.5 : 0))
                         .frame(width: 13, height: 13)
                 }

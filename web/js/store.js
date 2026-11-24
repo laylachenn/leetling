@@ -44,15 +44,47 @@ export function daysAgo(n, from = new Date()) {
 /** Swift's .iso8601 date strategy rejects fractional seconds, so drop them. */
 const isoNow = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 
-export function streakFrom(dayLog, now = new Date()) {
+/** The longest run of missed days that can still be mended. */
+export const MAX_MEND_GAP = 7;
+
+/** Same as LeetlingSnapshot.streakDetail in Swift: keep the two identical.
+ *  Every problem beyond the first on a day is a make-up credit. Walking back from today, a gap of up to
+ *  MAX_MEND_GAP missed days is mended (and counts toward the streak) if the days after it banked at least
+ *  one credit per missed day. Credits are spent on the newest gap first. */
+export function streakDetail(dayLog, now = new Date()) {
   const count = (d) => (dayLog[dayKey(d)] || []).length;
   let offset = count(now) > 0 ? 0 : 1;
-  let total = 0;
-  while (count(daysAgo(offset, now)) > 0) {
-    total++;
-    offset++;
+  let total = 0, credit = 0;
+  const mended = new Set();
+  for (;;) {
+    const c = count(daysAgo(offset, now));
+    if (c > 0) { total++; credit += c - 1; offset++; continue; }
+    if (total === 0) break;   // a gap needs solves after it to be mended
+    let gap = 0;
+    while (gap <= MAX_MEND_GAP && count(daysAgo(offset + gap, now)) === 0) gap++;
+    if (gap > MAX_MEND_GAP || credit < gap) break;   // too long, or not made up yet
+    credit -= gap;
+    for (let i = 0; i < gap; i++) mended.add(dayKey(daysAgo(offset + i, now)));
+    total += gap;
+    offset += gap;
   }
-  return total;
+  return { length: total, mended };
+}
+
+export function streakFrom(dayLog, now = new Date()) { return streakDetail(dayLog, now).length; }
+
+/** If solving more today would mend a broken streak: { needed, wouldBe }, else null. */
+export function mendHint(dayLog, now = new Date()) {
+  const today = dayKey(now);
+  const have = (dayLog[today] || []).length;
+  // Only the length of today's list matters to the streak, so pad it with placeholders.
+  const streakWith = (n) => streakFrom({ ...dayLog, [today]: Array(n).fill(0) }, now);
+  const baseline = streakWith(Math.max(have, 1));
+  for (let more = 1; more <= MAX_MEND_GAP + 1; more++) {
+    const s = streakWith(have + more);
+    if (s > baseline) return { needed: more, wouldBe: s };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- progress
@@ -206,27 +238,29 @@ class Store {
   get todayCount() { return (this.progress.dayLog[dayKey()] || []).length; }
   get streak() { return streakFrom(this.progress.dayLog); }
 
+  /** The longest streak ever, mends included. */
   get bestStreak() {
-    const days = Object.keys(this.progress.dayLog).filter((k) => this.progress.dayLog[k].length).sort();
-    let best = 0, run = 0, prev = null;
-    for (const k of days) {
+    let best = 0;
+    for (const k of Object.keys(this.progress.dayLog)) {
+      if (!this.progress.dayLog[k].length) continue;
       const [y, m, d] = k.split("-").map(Number);
-      const date = new Date(y, m - 1, d);
-      run = prev && Math.round((date - prev) / 86400000) === 1 ? run + 1 : 1;
-      best = Math.max(best, run);
-      prev = date;
+      best = Math.max(best, streakFrom(this.progress.dayLog, new Date(y, m - 1, d)));
     }
     return best;
   }
+
+  get mendHint() { return mendHint(this.progress.dayLog); }
 
   get nextMilestone() { return STREAK_MILESTONES.find((m) => m > this.streak) ?? null; }
 
   /** The 7-day strip for the streak card, oldest first. */
   week(now = new Date()) {
+    const { mended } = streakDetail(this.progress.dayLog, now);
     return [6, 5, 4, 3, 2, 1, 0].map((ago) => {
       const date = daysAgo(ago, now);
       const count = (this.progress.dayLog[dayKey(date)] || []).length;
-      return { date, count, isToday: ago === 0, done: count > 0, goalMet: count >= this.progress.dailyGoal };
+      return { date, count, isToday: ago === 0, done: count > 0,
+               mended: mended.has(dayKey(date)), goalMet: count >= this.progress.dailyGoal };
     });
   }
 
@@ -257,7 +291,8 @@ class Store {
     const key = String(problem.id);
     const firstSolve = this.progress.solved[key] == null;
     const rewards = [];
-    let streak = 0, todays = [];
+    let streak = 0, todays = [], streakMended = false;
+    const streakBefore = this.streak;
 
     this.update((p) => {
       const rec = p.solved[key];
@@ -280,6 +315,7 @@ class Store {
       }
 
       streak = streakFrom(p.dayLog, now);
+      streakMended = streak > streakBefore + 1;
       const streakStart = dayKey(daysAgo(Math.max(0, streak - 1), now));
       for (const m of STREAK_MILESTONES) {
         if (streak < m) continue;
@@ -298,7 +334,7 @@ class Store {
     }, { immediate: true, silent: true });
 
     this.celebration = { id: Math.random(), problemTitle: problem.title, firstSolve, rewards, streak,
-                         todayCount: todays.length, goal: this.progress.dailyGoal };
+                         streakMended, todayCount: todays.length, goal: this.progress.dailyGoal };
     this.emit();
   }
 

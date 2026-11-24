@@ -111,6 +111,7 @@ function StreakCard({ compact = false }) {
       </div>
       ${week.map((d) => html`<div class="sc-mark">${d.goalMet ? html`<span class="heart">♥</span>`
         : d.done ? html`<span class="check">✓</span>`
+        : d.mended ? html`<span class="mend" title="Mended with extra solves">🩹</span>`
         : d.isToday ? html`<span class="ring"></span>` : html`<span class="dot"></span>`}</div>`)}
     </div>
   </div>`;
@@ -195,7 +196,9 @@ function TodayView() {
 function BuddyCard() {
   const today = store.todayCount, goal = store.progress.dailyGoal, buddy = store.buddy;
   let message;
-  if (store.problems.length && store.solvedCount === store.problems.length) message = "You finished the Blind 75?! I'm crying 😭💖";
+  const mend = store.mendHint;
+  if (mend) message = `Solve ${today === 0 ? `${mend.needed} problem${mend.needed === 1 ? "" : "s"}` : `${mend.needed} more`} today to mend our streak back to ${mend.wouldBe}! 🩹🔥`;
+  else if (store.problems.length && store.solvedCount === store.problems.length) message = "You finished the Blind 75?! I'm crying 😭💖";
   else if (today >= goal) message = today > goal ? "Overachiever!! I love you 💞" : "Goal met! I'm so proud of you 💖";
   else if (today > 0) message = `One down! ${goal - today} more for today's goal 🌷`;
   else if (store.streak > 0) message = `Let's keep our ${store.streak}-day streak alive! 🔥`;
@@ -538,7 +541,7 @@ function Celebration({ c }) {
       <p dangerouslySetInnerHTML=${{ __html: c.firstSolve ? `You solved <b>${c.problemTitle}</b> for the first time!`
         : `You solved <b>${c.problemTitle}</b> again, that's how it sticks 🧠` }}></p>
       <div class="stats">
-        <div><b>🔥 ${c.streak}</b><span>day streak</span></div>
+        <div><b>🔥 ${c.streak}</b><span>${c.streakMended ? "streak mended 🩹" : "day streak"}</span></div>
         <div><b>💖 ${c.todayCount}/${c.goal}</b><span>today</span></div>
         <div><b>📚 ${store.solvedCount}/${store.problems.length}</b><span>solved</span></div>
       </div>

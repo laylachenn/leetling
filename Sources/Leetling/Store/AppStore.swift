@@ -41,6 +41,7 @@ struct Celebration: Identifiable {
     let firstSolve: Bool
     let rewards: [Reward]
     let streak: Int
+    var streakMended = false   // this solve made up for missed days
     let todayCount: Int
     let goal: Int
 }
@@ -212,17 +213,8 @@ final class AppStore {
     var todayCount: Int { progress.dayLog[DayKey.key()]?.count ?? 0 }
     var streak: Int { snapshot.streak() }
 
-    var bestStreak: Int {
-        let days = progress.dayLog.filter { !$0.value.isEmpty }.keys.compactMap(DayKey.date).sorted()
-        var best = 0, run = 0
-        var previous: Date?
-        for d in days {
-            if let p = previous, Calendar.current.dateComponents([.day], from: p, to: d).day == 1 { run += 1 } else { run = 1 }
-            best = max(best, run)
-            previous = d
-        }
-        return best
-    }
+    var bestStreak: Int { snapshot.bestStreak() }
+    var mendHint: (needed: Int, wouldBe: Int)? { snapshot.mendHint() }
 
     var nextMilestone: Int? { Self.streakMilestones.first { $0 > streak } }
 
@@ -282,6 +274,7 @@ final class AppStore {
             give(.bloom, p.dailyGoal == 1 ? "Daily goal reached!" : "Daily goal of \(p.dailyGoal) reached!")
         }
 
+        let streakBefore = snapshot.streak(now: now)
         let snap = LeetlingSnapshot(dayCounts: p.dayLog.mapValues(\.count), goal: p.dailyGoal)
         let streak = snap.streak(now: now)
         let streakStart = DayKey.key(DayKey.daysAgo(max(0, streak - 1), from: now))
@@ -302,7 +295,8 @@ final class AppStore {
         progress = p
         saveNow()
         let celebration = Celebration(problemTitle: problem.title, firstSolve: firstSolve, rewards: rewards,
-                                      streak: streak, todayCount: todays.count, goal: p.dailyGoal)
+                                      streak: streak, streakMended: streak > streakBefore + 1,
+                                      todayCount: todays.count, goal: p.dailyGoal)
         self.celebration = celebration
         return celebration
     }
